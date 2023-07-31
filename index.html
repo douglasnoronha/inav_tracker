@@ -1,59 +1,88 @@
+
 <!DOCTYPE html>
-<html>
-<head>
-  <title>Visualização de Arquivo CSV</title>
-  <!-- Inclua o Leaflet.js e o CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-</head>
-<body>
-  <h1>Visualização de Arquivo CSV</h1>
-  <form id="csvForm" enctype="multipart/form-data">
-    <input type="file" id="csvFile" accept=".csv" required>
-    <input type="submit" value="Enviar">
-  </form>
-  <div id="map" style="height: 400px;"></div>
-  <div id="data-list"></div>
+  <html>
+    <head>
+      <title>Visualização de Arquivo CSV</title>
+      <!-- Inclua o Leaflet.js e o CSS -->
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+      <style>
+        /* Estilo para o layout de duas colunas */
+        .container {
+          display: flex;
+          flex-wrap: wrap;
+        }
+        #map {
+          flex: 1;
+          height: 400px;
+        }
+        #data-list {
+          flex: 1;
+          height: 400px;
+          overflow-y: scroll;
+          width: 50%;
+        }
+        /* Estilo para os itens da lista */
+        .data-item {
+          cursor: pointer;
+          padding: 5px;
+          border-bottom: 1px solid #ccc;
+        }
+        .data-item:last-child {
+          border-bottom: none;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Visualização de Arquivo CSV</h1>
+      <form id="csvForm" enctype="multipart/form-data">
+        <input type="file" id="csvFile" accept=".csv" required>
+        <input type="submit" value="Enviar">
+      </form>
+      <div class="container">
+        <div id="data-list"></div>
+        <div id="map"></div>
+      </div>
 
-  <script>
-    // Função para ler o arquivo CSV
-    function readCSV(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
+      <script>
+        // Função para ler o arquivo CSV
+        function readCSV(file) {
+          return new Promise((resolve, reject) => {
+              const reader = new FileReader();
 
-        reader.onload = (event) => {
-        const csvData = event.target.result;
-        const lines = csvData.split('\n');
-        const data = [];
+              reader.onload = (event) => {
+              const csvData = event.target.result;
+              const lines = csvData.split('\n');
+              const data = [];
 
-        for (let i = 1; i < lines.length; i++) {
-            const columns = lines[i].split(',');
-            const date = columns[0];
-            const time = columns[1];
-            const rqly = parseFloat(columns[4]);
-            const gps = columns[14];
-            const alt = columns[17];
-            const rxbat = parseFloat(columns[19]);
-            const bat = parseFloat(columns[22]);
+              for (let i = 1; i < lines.length; i++) {
+                  const columns = lines[i].split(',');
+                  const date = columns[0];
+                  const time = columns[1];
+                  const rqly = parseFloat(columns[4]);
+                  const gps = columns[14];
+                  const alt = columns[17];
+                  const rxbat = parseFloat(columns[19]);
+                  const bat = parseFloat(columns[22]);
 
-            if (!isNaN(rqly) && gps && !isNaN(alt)) {
-            data.push({ date, time, rqly, gps, alt, rxbat, bat });
-            }
+                  if (!isNaN(rqly) && gps && !isNaN(alt)) {
+                  data.push({ date, time, rqly, gps, alt, rxbat, bat });
+                  }
+              }
+
+              resolve(data);
+              };
+
+              reader.onerror = (error) => {
+              reject(error);
+              };
+
+              reader.readAsText(file);
+          });
         }
 
-        resolve(data);
-        };
-
-        reader.onerror = (error) => {
-        reject(error);
-        };
-
-        reader.readAsText(file);
-    });
-    }
-
-    // Função para exibir os dados no mapa e na lista lateral
-    function displayDataOnMapAndList(data) {
+      // Função para exibir os dados no mapa e na lista lateral
+      function displayDataOnMapAndList(data) {
         const map = L.map('map').setView([0, 0], 2); // Defina a visualização inicial do mapa
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -70,34 +99,48 @@
             const [latitude, longitude] = item.gps.split(' '); // Separe os valores de latitude e longitude
 
             // Adicione um marcador no mapa para cada ponto
-            L.marker([latitude, longitude]).addTo(map)
-            .bindPopup(`<b>Data:</b> ${item.date}<br><b>Time:</b> ${item.time}<br><b>RQly(%):</b> ${item.rqly}%<br><b>Alt(m):</b> ${item.alt}m<br><b>Bat(%):</b> ${item.bat}%<br><b>RxBat(V):</b> ${item.rxbat}V`);
+            const newMarker =  L.marker([latitude, longitude]).addTo(map)
+            .bindPopup(`<b>Data:</b> ${item.date}<br><b>Time:</b> ${item.time}<br><b>RQly(%):</b> ${item.rqly}%<br><b>Alt(m):</b> ${item.alt}m<br><b>Bat(%):</b> ${item.bat}%<br><b>RxBat(V):</b> ${item.rxbat}V`)
+            //.on('click', clickZoom)
+            //.openPopup();
 
             // Adicione os dados à lista lateral
             const dataList = document.getElementById('data-list');
             const listItem = document.createElement('div');
+            listItem.className = 'data-item';
             listItem.innerHTML = `<b>Data:</b> ${item.date}, <b>Time:</b> ${item.time}, <b>RQly(%):</b> ${item.rqly}%, <b>Alt(m):</b> ${item.alt}m, <b>Bat(%):</b> ${item.bat}%, <b>RxBat(V):</b> ${item.rxbat}V`;
             dataList.appendChild(listItem);
+
+            // Adicionar evento de clique no item da lista para centralizar no mapa e aplicar o zoom máximo
+            listItem.addEventListener('click', () => {
+              map.setView([latitude, longitude], 18);
+              clickZoom(newMarker);
+              //polyline.getLatLngs()[index].fire('click'); // Simular um clique no ponto da polyline para exibir o popup
+            });
         });
-    }
+      }
 
-    // Quando o documento estiver pronto, execute a função para lidar com o envio do formulário
-    document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('csvForm');
+      function clickZoom(e) {
+        e.openPopup();
+      }
 
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const fileInput = document.getElementById('csvFile');
-        const file = fileInput.files[0];
+      // Quando o documento estiver pronto, execute a função para lidar com o envio do formulário
+      document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('csvForm');
 
-        try {
-        const data = await readCSV(file);
-        displayDataOnMapAndList(data);
-        } catch (error) {
-        console.error('Erro ao ler o arquivo CSV:', error);
-        }
-    });
-    });
-  </script>
-</body>
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const fileInput = document.getElementById('csvFile');
+          const file = fileInput.files[0];
+
+          try {
+            const data = await readCSV(file);
+            displayDataOnMapAndList(data);
+          } catch (error) {
+          console.error('Erro ao ler o arquivo CSV:', error);
+          }
+        });
+      });
+    </script>
+  </body>
 </html>
