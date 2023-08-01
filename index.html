@@ -6,6 +6,7 @@
       <!-- Inclua o Leaflet.js e o CSS -->
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
       <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
       <style>
         /* Estilo para o layout de duas colunas */
         .container {
@@ -42,6 +43,10 @@
       <div class="container">
         <div id="data-list"></div>
         <div id="map"></div>
+      </div>
+      <h1>Gráfico de Altitude</h1>
+      <div id="altitude-chart-container">
+          <canvas id="altitude-chart" width="100%" height="500px"></canvas>
       </div>
 
       <script>
@@ -124,6 +129,34 @@
         e.openPopup();
       }
 
+      function displayAltitudeChart(data) {
+        // Extrair os dados de altitude do array de objetos
+        const altitudeData = data.map(item => item.alt);
+
+        // Configurar o contexto do gráfico
+        const ctx = document.getElementById('altitude-chart').getContext('2d');
+
+        // Configurar o gráfico usando Chart.js
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.map(item => `${item.date} ${item.time}`), // Rótulos do eixo X
+            datasets: [{
+              label: 'Altitude (m)',
+              data: altitudeData,
+              borderColor: 'rgb(75, 192, 192)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              fill: true,
+              tension: 0.2,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+          }
+        });
+      }
+
       // Quando o documento estiver pronto, execute a função para lidar com o envio do formulário
       document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('csvForm');
@@ -136,6 +169,7 @@
           try {
             const data = await readCSV(file);
             displayDataOnMapAndList(data);
+            displayAltitudeChart(data);
           } catch (error) {
           console.error('Erro ao ler o arquivo CSV:', error);
           }
