@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Visualização de Arquivo CSV</title>
+  <style>
+    #map {
+      height: 400px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Visualização de Arquivo CSV</h1>
+  <form id="csvForm" enctype="multipart/form-data">
+    <input type="file" id="csvFile" accept=".csv" required>
+    <input type="submit" value="Enviar">
+  </form>
+  <div id="map"></div>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA82nAD5LBeLR-occ-2pgMtR62vanFDXTA&callback=initMap" async defer></script>
+  <script>
+      let map; // Variável global para armazenar o mapa
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 0, lng: 0 },
+    zoom: 2
+  });
+}
+
+// Função para limpar o mapa
+function clearMap() {
+  if (map) {
+    map.setZoom(2);
+    map.setCenter({ lat: 0, lng: 0 });
+    map.data.forEach(function (feature) {
+      map.data.remove(feature);
+    });
+  }
+}
+
+// Função para ler o arquivo CSV (mantendo a implementação anterior)
+function readCSV(file) {
+    return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+              const csvData = event.target.result;
+              const lines = csvData.split('\n');
+              const data = [];
+              let headers = [];
+
+              for (let i = 0; i < lines.length; i++) {
+                const columns = lines[i].split(',');
+
+                if (i === 0) {
+                  // Salvar os cabeçalhos em um array
+                  headers = columns.map(header => header.trim());
+                } else {
+                  // Montar o objeto de dados com base nos índices dos campos identificados
+                  const item = {};
+                  headers.forEach((header, index) => {
+                    const value = columns[index];
+
+                    /*if (header === 'Date' || header === 'Time' || header === 'RQly(%)' || header === 'GPS' ||
+                        header === 'Alt(m)' || header === 'RxBt(V)' || header === 'Hdg(°)' || header === 'Bat%(%)') {
+                      item[header] = value;
+                    }*/
+                    if (header === 'LAT' || header === 'LON' || header === 'radio_time' || header === 'satellites' ||
+                        header === 'GPSalt' || header === 'GPSspeed') {
+                      item[header] = value;
+                    }
+                  });
+
+                  data.push(item);
+                }
+              }
+
+              resolve(data);
+            };
+
+            reader.onerror = (error) => {
+              reject(error);
+            };
+
+            reader.readAsText(file);
+          });
+}
+
+// Função para exibir os dados no mapa
+function displayDataOnMapAndList(data) {
+  clearMap();
+
+  data.forEach(item => {
+    //const gps = item['GPS'];
+    //if (gps) {
+      //const [latitude, longitude] = gps.split(' ').map(Number);
+        const latitude = parseFloat(item['LAT']);
+        const longitude = parseFloat(item['LON']);
+
+      /*const icon = {
+        url: 'path/to/drone-icon.png', // Caminho para o ícone do drone
+        scaledSize: new google.maps.Size(30, 30), // Tamanho do ícone
+        origin: new google.maps.Point(0, 0), // Ponto de origem do ícone
+        anchor: new google.maps.Point(15, 15), // Ponto de ancoragem do ícone
+        rotation: Number(item['Hdg(°)']) // Rotação do ícone baseada em Hdg(°)
+      };*/
+
+      const marker = new google.maps.Marker({
+        position: { lat: latitude, lng: longitude },
+        map: map,
+        //icon: icon
+      });
+
+      // Adicione informações ao infowindow, se necessário
+      const infowindow = new google.maps.InfoWindow({
+        content: `
+          <b>Data:</b> ${item['radio_time']}<br>
+        `
+      });
+      /*const infowindow = new google.maps.InfoWindow({
+        content: `
+          <b>Data:</b> ${item['Date']}<br>
+          <b>Time:</b> ${item['Time']}<br>
+          <b>RQly(%):</b> ${item['RQly(%)']}%<br>
+          <b>Alt(m):</b> ${item['Alt(m)']}m<br>
+          <b>RxBt(V):</b> ${item['RxBt(V)']}V<br>
+          <b>Bat%(%):</b> ${item['Bat%(%)']}%
+        `
+      });*/
+
+      marker.addListener('click', function () {
+        infowindow.open(map, marker);
+      });
+    //}
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('csvForm');
+
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const fileInput = document.getElementById('csvFile');
+          const file = fileInput.files[0];
+
+          try {
+            const data = await readCSV(file);
+            displayDataOnMapAndList(data);
+          } catch (error) {
+          console.error('Erro ao ler o arquivo CSV:', error);
+          }
+        });
+      });
+
+  </script>
+</body>
+</html>

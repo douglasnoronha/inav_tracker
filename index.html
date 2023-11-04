@@ -35,7 +35,7 @@
       </style>
     </head>
     <body>
-      <h1>Visualização de Arquivo CSV</h1>
+      <h1>Telemetria de Voo</h1>
       <form id="csvForm" enctype="multipart/form-data">
         <input type="file" id="csvFile" accept=".csv" required>
         <input type="submit" value="Enviar">
@@ -44,105 +44,108 @@
         <div id="data-list"></div>
         <div id="map"></div>
       </div>
-      <h1>Gráfico de Altitude</h1>
+      <h1>Velocidade máxima</h1>
+      <div id="maxSpeed"></div>
+      <h1>Distância total</h1>
+      <div id="trip"></div>
+      <h1>Gráfico de Corrente</h1>
       <div id="altitude-chart-container">
           <canvas id="altitude-chart" width="100%" height="500px"></canvas>
       </div>
 
       <script>
+        let map;
+        let altitudeChart;
+        // Função para limpar o mapa
+        function clearMap() {
+          if (map) {
+            map.eachLayer((layer) => {
+              map.removeLayer(layer);
+            });
+          } else {
+            map = L.map('map').setView([0, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+          }
+        }
+
+        // Função para limpar o gráfico de altitude
+        function clearAltitudeChart() {
+          if (altitudeChart) {
+            altitudeChart.destroy();
+          }
+        }
+
         // Função para ler o arquivo CSV
         function readCSV(file) {
           return new Promise((resolve, reject) => {
-              const reader = new FileReader();
+            const reader = new FileReader();
 
-              reader.onload = (event) => {
+            reader.onload = (event) => {
               const csvData = event.target.result;
               const lines = csvData.split('\n');
               const data = [];
+              let headers = [];
 
-              for (let i = 1; i < lines.length; i++) {
-                  const columns = lines[i].split(',');
-                  const date = columns[0];
-                  const time = columns[1];
-                  const rqly = parseFloat(columns[4]);
-                  const gps = columns[14];
-                  const alt = columns[17];
-                  const rxbat = parseFloat(columns[19]);
-                  const bat = parseFloat(columns[22]);
+              for (let i = 0; i < lines.length; i++) {
+                const columns = lines[i].split(',');
 
-                  if (!isNaN(rqly) && gps && !isNaN(alt)) {
-                  data.push({ date, time, rqly, gps, alt, rxbat, bat });
-                  }
+                if (i === 0) {
+                  // Salvar os cabeçalhos em um array
+                  headers = columns.map(header => header.trim());
+                } else {
+                  // Montar o objeto de dados com base nos índices dos campos identificados
+                  const item = {};
+                  headers.forEach((header, index) => {
+                    const value = columns[index];
+
+                    if (header === 'Date' || header === 'Time' || header === 'RQly(%)' || header === 'GPS' || header === 'GSpd(kmh)' || header === 'CH3(us)' ||
+                        header === 'Alt(m)' || header === 'RxBt(V)' || header === 'Curr(A)' || header === 'Hdg(°)' || header === 'Bat%(%)') {
+                      item[header] = value;
+                    }
+                    /*if (header === 'LAT' || header === 'LON' || header === 'radio_time' || header === 'satellites' ||
+                        header === 'GPSalt' || header === 'GPSspeed') {
+                      item[header] = value;
+                    }*/
+                  });
+
+                  data.push(item);
+                }
               }
 
               resolve(data);
-              };
+            };
 
-              reader.onerror = (error) => {
+            reader.onerror = (error) => {
               reject(error);
-              };
+            };
 
-              reader.readAsText(file);
+            reader.readAsText(file);
           });
         }
 
       // Função para exibir os dados no mapa e na lista lateral
       function displayDataOnMapAndList(data) {
-        const map = L.map('map').setView([0, 0], 2); // Defina a visualização inicial do mapa
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        clearMap();
+        clearAltitudeChart();
 
-        const latLngArray = data.map(item => {
-            const [latitude, longitude] = item.gps.split(' '); // Separe os valores de latitude e longitude
-            return [latitude, longitude];
-        });
+        let maxSpeed = 0.0;
 
-        // Adicione uma polyline no mapa para conectar os pontos de GPS
-        L.polyline(latLngArray).addTo(map);
+        const latLngArray = [];
+        let bounds = L.latLngBounds();
 
-        data.forEach(item => {
-            const [latitude, longitude] = item.gps.split(' '); // Separe os valores de latitude e longitude
+        const altitudeData = data.map(item => item['Curr(A)']);
 
-            // Adicione um marcador no mapa para cada ponto
-            const newMarker =  L.marker([latitude, longitude]).addTo(map)
-            .bindPopup(`<b>Data:</b> ${item.date}<br><b>Time:</b> ${item.time}<br><b>RQly(%):</b> ${item.rqly}%<br><b>Alt(m):</b> ${item.alt}m<br><b>Bat(%):</b> ${item.bat}%<br><b>RxBat(V):</b> ${item.rxbat}V`)
-            //.on('click', clickZoom)
-            //.openPopup();
-
-            // Adicione os dados à lista lateral
-            const dataList = document.getElementById('data-list');
-            const listItem = document.createElement('div');
-            listItem.className = 'data-item';
-            listItem.innerHTML = `<b>Data:</b> ${item.date}, <b>Time:</b> ${item.time}, <b>RQly(%):</b> ${item.rqly}%, <b>Alt(m):</b> ${item.alt}m, <b>Bat(%):</b> ${item.bat}%, <b>RxBat(V):</b> ${item.rxbat}V`;
-            dataList.appendChild(listItem);
-
-            // Adicionar evento de clique no item da lista para centralizar no mapa e aplicar o zoom máximo
-            listItem.addEventListener('click', () => {
-              map.setView([latitude, longitude], 18);
-              clickZoom(newMarker);
-              //polyline.getLatLngs()[index].fire('click'); // Simular um clique no ponto da polyline para exibir o popup
-            });
-        });
-      }
-
-      function clickZoom(e) {
-        e.openPopup();
-      }
-
-      function displayAltitudeChart(data) {
-        // Extrair os dados de altitude do array de objetos
-        const altitudeData = data.map(item => item.alt);
-
-        // Configurar o contexto do gráfico
         const ctx = document.getElementById('altitude-chart').getContext('2d');
 
         // Configurar o gráfico usando Chart.js
-        new Chart(ctx, {
+        altitudeChart = new Chart(ctx, {
           type: 'line',
           data: {
-            labels: data.map(item => `${item.date} ${item.time}`), // Rótulos do eixo X
+            labels: data.map(item => `${item['Date']} ${item['Time']}`), // Rótulos do eixo X
+            //labels: data.map(item => `${item['radio_time']}`), // Rótulos do eixo X
             datasets: [{
-              label: 'Altitude (m)',
+              label: 'Corrent (A)',
               data: altitudeData,
               borderColor: 'rgb(75, 192, 192)',
               backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -155,6 +158,179 @@
             maintainAspectRatio: false,
           }
         });
+
+        let distanciaTotal = 0;
+        data.forEach(item => {
+          const gps = item['GPS'];
+          if(gps){
+            item['Power(W)'] = item['Curr(A)'] * item['RxBt(V)'];
+            const [latitude, longitude] = gps.split(' ').map(Number);
+            latLngArray.push([latitude, longitude]);
+            // Cálculo da distância
+            if (latLngArray.length > 1) {
+              const lat1 = latLngArray[latLngArray.length - 2][0];
+              const lon1 = latLngArray[latLngArray.length - 2][1];
+              const lat2 = latitude;
+              const lon2 = longitude;
+              const distanciaEntrePontos = calcularDistancia(lat1, lon1, lat2, lon2);
+              distanciaTotal += distanciaEntrePontos;
+            }
+            // Cria um ícone do drone com a direção do campo Hdg(°)
+            /*const icon = L.divIcon({
+              className: 'arrow-icon',
+              html: `<div style="transform: rotate(${item['Hdg(°)']}deg);">&#128747;</div>`,
+              iconSize: [60, 60],
+            });*/
+
+            // Adicione um marcador no mapa para cada ponto
+            const newMarker =  L.marker([latitude, longitude]).addTo(map)
+            .bindPopup(`<b>Data:</b> ${item['Date']}<br><b>Time:</b> ${item['Time']}<br><b>RQly(%):</b> ${item['RQly(%)']}%<br><b>Alt(m):</b> ${item['Alt(m)']}m<br><b>Velocidade:</b> ${item['GSpd(kmh)']}km/h<br><b>RxBt(V):</b> ${item['RxBt(V)']}V<br><b>Bat%(%):</b> ${item['Bat%(%)']}%`);
+            const speed = parseFloat(item['GSpd(kmh)']);
+            if (speed >= maxSpeed) {
+              maxSpeed = speed;
+            }
+            //.bindPopup(`<b>Data:</b> ${item['radio_time']}`);
+
+            // Adiciona as coordenadas ao bound
+            bounds.extend([latitude, longitude]);
+
+            // Adicione os dados à lista lateral
+            const dataList = document.getElementById('data-list');
+            const listItem = document.createElement('div');
+            listItem.className = 'data-item';
+            listItem.innerHTML = `<b>Data:</b> ${item['Date']} <b>Time:</b> ${item['Time']} <b>RxBt(V):</b> ${item['RxBt(V)']}V <b>Corrent:</b> ${item['Curr(A)']}`;
+            dataList.appendChild(listItem);
+
+            // Adicionar evento de clique no item da lista para centralizar no mapa e aplicar o zoom máximo
+            listItem.addEventListener('click', () => {
+              map.setView([latitude, longitude], 18);
+              clickZoom(newMarker);
+              //polyline.getLatLngs()[index].fire('click'); // Simular um clique no ponto da polyline para exibir o popup
+            });
+          }
+        });
+
+        const propriedades = ['GSpd(kmh)', 'Curr(A)', 'RQly(%)', 'RxBt(V)', 'Power(W)'];
+        const estatisticas = {};
+        propriedades.forEach(propriedade => {
+          estatisticas[propriedade] = {
+            minimo: calcularMinimo(data, propriedade),
+            media: calcularMedia(data, propriedade),
+            maximo: calcularMaximo(data, propriedade)
+          };
+        });
+        const tabela = document.createElement('table');
+        const cabecalho = tabela.createTHead();
+        const linhaCabecalho = cabecalho.insertRow();
+        // Adicionar cabeçalhos
+        ['Propriedade', 'Mínimo', 'Médio', 'Máximo'].forEach(texto => {
+          const celula = document.createElement('th');
+          celula.textContent = texto;
+          linhaCabecalho.appendChild(celula);
+        });
+        // Adicionar linhas com os valores
+        propriedades.forEach(propriedade => {
+          const linha = tabela.insertRow();
+          const celulaPropriedade = linha.insertCell();
+          celulaPropriedade.textContent = propriedade;
+
+          ['minimo', 'media', 'maximo'].forEach(chave => {
+            const celulaValor = linha.insertCell();
+            celulaValor.textContent = estatisticas[propriedade][chave].toFixed(1);
+          });
+        });
+        document.body.appendChild(tabela);
+        // Adicione uma polyline no mapa para conectar os pontos de GPS
+        L.polyline(latLngArray).addTo(map);
+        // Ajusta o mapa para mostrar todos os pontos
+        //map.fitBounds(bounds);
+        const speed = document.getElementById('maxSpeed');
+        speed.innerHTML = `${maxSpeed}km/h`;
+        const distanciaFormatada = formatarDistancia(distanciaTotal);
+        const trip = document.getElementById('trip');
+        trip.innerHTML = `${distanciaFormatada}`;
+      }
+
+      function clickZoom(e) {
+        e.openPopup();
+      }
+
+      function formatarDistancia(distancia) {
+        if (distancia >= 1) {
+          return `${distancia.toFixed(2)} km`;
+        } else {
+          return `${(distancia * 1000).toFixed(2)} m`;
+        }
+      }
+
+      // Função para calcular o valor mínimo de uma propriedade em um array de objetos
+      function calcularMinimo(data, propriedade) {
+        let min = Infinity;
+        data.forEach(item => {
+          const value = parseFloat(item[propriedade]);
+          if (!isNaN(value) && value > 0 && value < min) {
+            min = value;
+          }
+        });
+        return min;
+      }
+
+      // Função para calcular o valor médio de uma propriedade em um array de objetos
+      function calcularMedia(data, propriedade) {
+        let value = 0;
+        data.forEach(item => {
+          if(!isNaN(item[propriedade])){
+            value += parseFloat(item[propriedade]);
+          }
+        });
+        const avg = value / data.length;
+        return avg;
+      }
+
+      function calcularMaximo(data, propriedade) {
+        let max = 0;
+        data.forEach(item => {
+          const value = parseFloat(item[propriedade]);
+          if (value >= max) {
+            max = value;
+          }
+        });
+        return max;
+      }
+
+      function calcularDistancia(lat1, lon1, lat2, lon2) {
+        const raioTerra = 6371; // Raio da Terra em quilômetros
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distancia = raioTerra * c;
+
+        return distancia;
+      }
+
+      function toRad(valor) {
+        return valor * Math.PI / 180;
+      }
+
+      function calcularDistanciaTotal(coordenadas) {
+        let distanciaTotal = 0;
+
+        for (let i = 0; i < coordenadas.length - 1; i++) {
+            const lat1 = coordenadas[i][0];
+            const lon1 = coordenadas[i][1];
+            const lat2 = coordenadas[i + 1][0];
+            const lon2 = coordenadas[i + 1][1];
+
+            distanciaTotal += calcularDistancia(lat1, lon1, lat2, lon2);
+        }
+
+        return distanciaTotal;
       }
 
       // Quando o documento estiver pronto, execute a função para lidar com o envio do formulário
@@ -169,7 +345,6 @@
           try {
             const data = await readCSV(file);
             displayDataOnMapAndList(data);
-            displayAltitudeChart(data);
           } catch (error) {
           console.error('Erro ao ler o arquivo CSV:', error);
           }
